@@ -1,93 +1,227 @@
-# meowbot
+# 🤖 MeowBot AI
 
+MeowBot AI is a futuristic AI chatbot built using Streamlit and Groq LLMs with PDF document intelligence support.
 
+Users can upload PDFs, ask questions about documents, and interact with an advanced cyberpunk-themed chatbot UI.
 
-## Getting started
+---
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+# ✨ Features
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+## ⚡ Groq-Powered AI Responses
 
-## Add your files
+MeowBot AI uses Groq’s ultra-fast inference engine with OpenAI-compatible APIs to generate extremely fast AI responses. The app supports multiple models including:
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+* `llama-3.3-70b-versatile`
+* `llama3-8b-8192`
+* `gemma2-9b-it`
 
+The selected model processes user prompts and generates conversational responses in real time.
+
+---
+
+## 📄 PDF Intelligence System
+
+Users can upload PDF documents directly into the chatbot.
+
+### How it works
+
+1. The uploaded PDF is processed using **PyMuPDF**
+2. Text is extracted from every page
+3. The extracted text is stored temporarily in session memory
+4. When the user asks a question, the PDF content is injected into the AI prompt
+5. The AI answers using the document context
+
+This enables:
+
+* PDF summarization
+* Question answering
+* Context-aware responses
+* Document understanding
+
+---
+
+## 💬 Persistent Chat History
+
+The chatbot stores conversation history using Streamlit session state.
+
+### How it works
+
+* Every user and assistant message is stored inside:
+
+```python id="31mevb"
+st.session_state.messages
 ```
-cd existing_repo
-git remote add origin https://code.swecha.org/soumyajit_07/meowbot.git
-git branch -M main
-git push -uf origin main
+
+* Previous messages are sent back to the model during each API call
+* This allows contextual multi-turn conversations
+
+---
+
+## 🎨 Futuristic Cyberpunk UI
+
+The interface is fully customized using advanced CSS styling.
+
+### Includes
+
+* Glassmorphism effects
+* Neon glow aesthetics
+* Animated grid backgrounds
+* Responsive layout
+* Modern chat bubbles
+* Gradient typography
+* Custom sidebar styling
+
+The design is inspired by futuristic AI operating systems and cyberpunk interfaces.
+
+---
+
+## 🔑 Bring Your Own API Key (BYOK)
+
+Users can either:
+
+* Use the default API key from `.env`
+* Enter their own Groq API key directly in the sidebar
+
+### How it works
+
+The app dynamically switches between:
+
+```python id="0vy4np"
+GROQ_API_KEY
 ```
 
-## Integrate with your tools
+and user-provided keys from the sidebar input field.
 
-- [ ] [Set up project integrations](https://code.swecha.org/soumyajit_07/meowbot/-/settings/integrations)
+---
 
-## Collaborate with your team
+## 🧠 Multi-Model Support
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+Users can dynamically switch between multiple LLMs directly from the sidebar.
 
-## Test and Deploy
+### Benefits
 
-Use the built-in continuous integration in GitLab.
+* Faster responses
+* Different reasoning styles
+* Better experimentation
+* Lower latency options
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+The selected model is passed directly into the Groq API request.
 
-***
+---
 
-# Editing this README
+## 📂 PDF Upload System
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+The PDF uploader supports drag-and-drop uploads through Streamlit’s file uploader component.
 
-## Suggestions for a good README
+### Workflow
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+1. Upload PDF
+2. Extract text
+3. Save extracted text in session
+4. Enable PDF-aware AI responses
 
-## Name
-Choose a self-explaining name for your project.
+The uploaded document remains active until removed manually.
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+---
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+## 🛡 Error Handling
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+The application includes robust exception handling for:
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+* Invalid API keys
+* API connection failures
+* Rate limits
+* PDF parsing errors
+* Unexpected runtime exceptions
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+This prevents crashes and improves stability.
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+---
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+# 🛠 Tech Stack
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+| Technology | Purpose                |
+| ---------- | ---------------------- |
+| Python     | Backend logic          |
+| Streamlit  | Frontend framework     |
+| Groq API   | AI inference           |
+| OpenAI SDK | API compatibility      |
+| PyMuPDF    | PDF text extraction    |
+| dotenv     | Environment management |
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+---
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+# 📦 Installation
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+Clone the repository:
 
-## License
-For open source projects, say how it is licensed.
+```bash id="7xv7vt"
+git clone <your-repo-link>
+cd meowbot-ai
+```
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+Install dependencies:
+
+```bash id="jlwmcz"
+pip install -r requirements.txt
+```
+
+---
+
+# 🔑 Environment Variables
+
+Create a `.env` file:
+
+```env id="r4x6pr"
+GROQ_API_KEY=your_groq_api_key
+```
+
+Get your API key from:
+
+https://console.groq.com/keys
+
+---
+
+# ▶️ Run the App
+
+```bash id="b3a3lz"
+streamlit run app.py
+```
+
+---
+
+# 📁 Project Structure
+
+```bash id="t2m4hm"
+├── app.py
+├── requirements.txt
+├── .env
+└── README.md
+```
+
+---
+
+# 🚀 Future Improvements
+
+* RAG pipelines
+* Vector database support
+* OCR support
+* Multi-document querying
+* Voice assistant integration
+* Memory persistence
+* Authentication system
+* Cloud deployment support
+
+---
+
+# 📜 License
+
+MIT License
+
+---
+
+# 👨‍💻 Author
+
+Soumyajit Rout
+BITS Pilani — Computer Science
