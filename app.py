@@ -345,6 +345,19 @@ def render_sidebar():
                 st.session_state.pdf_name = ""
                 st.rerun()
 
+        # If no API key is available, allow a quick session-scoped paste here
+        if not final_api_key:
+            session_tmp = st.text_input(
+                "Paste Groq/OpenAI API key for this session (won't be saved to repo)",
+                type="password",
+                key="session_api_key",
+                placeholder="gsk_... or sk-...",
+            )
+
+            if session_tmp and session_tmp.strip():
+                st.session_state["user_api_key"] = session_tmp.strip()
+                final_api_key = session_tmp.strip()
+
         st.markdown('<div class="sidebar-section">CONTROLS</div>', unsafe_allow_html=True)
 
         if st.button("Clear Chat", use_container_width=True):
