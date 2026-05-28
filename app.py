@@ -14,27 +14,18 @@ load_dotenv()
 
 
 def get_default_api_key() -> str:
-    """Return the default API key.
-
-    Priority order:
-    1. Streamlit secrets (st.secrets)
-    2. Environment variables (GROQ_API_KEY then OPENAI_API_KEY)
-    3. Empty string
-    """
-    # First check Streamlit secrets (works on Streamlit Cloud)
     try:
         groq = st.secrets.get("GROQ_API_KEY") if hasattr(st, "secrets") else None
-        openai = st.secrets.get("OPENAI_API_KEY") if hasattr(st, "secrets") else None
+        openai_key = st.secrets.get("OPENAI_API_KEY") if hasattr(st, "secrets") else None
     except Exception:
         groq = None
-        openai = None
+        openai_key = None
 
     if groq:
         return str(groq).strip()
-    if openai:
-        return str(openai).strip()
+    if openai_key:
+        return str(openai_key).strip()
 
-    # Fallback to environment variables (for local dev using .env)
     return os.getenv("GROQ_API_KEY", "").strip() or os.getenv("OPENAI_API_KEY", "").strip()
 
 
@@ -91,8 +82,6 @@ html, body, [data-testid="stApp"] {
   max-width: 1200px !important;
   padding: 1.5rem 2rem 4rem !important;
 }
-
-/* CHAT MESSAGES */
 
 [data-testid="stChatMessage"] {
   background: var(--glass) !important;
@@ -216,20 +205,13 @@ def extract_pdf_text(uploaded_file) -> str:
 # ════════════════════════════════════════════════════════════
 
 def build_client(api_key: str) -> OpenAI:
-    """Build an OpenAI-compatible client.
-
-    If the key appears to be a Groq key (prefix 'gsk_'), point the client at Groq's
-    OpenAI-compatible endpoint. Otherwise use the default OpenAI host.
-    """
     api_key = (api_key or "").strip()
     if not api_key:
         raise ValueError("API key is required to build client")
 
-    # Simple prefix check to decide endpoint
     if api_key.startswith("gsk_"):
         return OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
 
-    # Default OpenAI endpoint
     return OpenAI(api_key=api_key)
 
 
@@ -239,8 +221,7 @@ def build_client(api_key: str) -> OpenAI:
 
 def build_prompt(user_input: str, pdf_text: str) -> str:
     if pdf_text.strip():
-        return f"""
-You are a helpful AI assistant.
+        return f"""You are a helpful AI assistant.
 
 Answer using the PDF content below.
 
@@ -270,48 +251,52 @@ def init_session():
         "messages": [],
         "pdf_text": "",
         "pdf_name": "",
-        "model": "llama-3.3-70b-versatile",
-        "api_mode": "Use Default API Key",
-        "user_api_key": "",
     }
-
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
 
 
 # ════════════════════════════════════════════════════════════
-# SIDEBAR
+# SIDEBAR  ← KEY FIX IS HERE
 # ════════════════════════════════════════════════════════════
 
 def render_sidebar():
-
     with st.sidebar:
-
         st.markdown('<div class="sidebar-logo">🤖 MEOWBOT AI</div>', unsafe_allow_html=True)
 
         st.markdown('<div class="sidebar-section">API CONFIG</div>', unsafe_allow_html=True)
 
+        # Use index-based default so session state doesn't fight the widget
         api_mode = st.radio(
-            "API",
+            "API Mode",
             ["Use Default API Key", "Bring Your Own API Key"],
-            key="api_mode",
             label_visibility="collapsed",
         )
 
+        # ── FIX: always initialise user_api_key, only overwrite when BYOK ──
         user_api_key = ""
-
         if api_mode == "Bring Your Own API Key":
             user_api_key = st.text_input(
-                "Groq API Key",
+                "Groq / OpenAI API Key",
                 type="password",
-                placeholder="gsk_...",
-                key="user_api_key",
+                placeholder="gsk_... or sk-...",
             )
 
+        # ── FIX: resolve final key correctly ──
         default_api_key = get_default_api_key()
+        if api_mode == "Use Default API Key":
+            final_api_key = default_api_key
+        else:
+            # BYOK: prefer what the user typed; fall back to default
+            final_api_key = user_api_key.strip() if user_api_key.strip() else default_api_key
 
-        final_api_key = user_api_key.strip() if user_api_key.strip() else default_api_key
+        # ── optional status hint ──
+        if api_mode == "Use Default API Key":
+            if default_api_key:
+                st.success("✅ Default key loaded", icon=None)
+            else:
+                st.warning("⚠️ No default key found. Add GROQ_API_KEY to .env or Streamlit secrets.")
 
         st.markdown('<div class="sidebar-section">MODEL</div>', unsafe_allow_html=True)
 
@@ -320,9 +305,8 @@ def render_sidebar():
             [
                 "llama-3.3-70b-versatile",
                 "llama3-8b-8192",
-                "gemma2-9b-it"
+                "gemma2-9b-it",
             ],
-            key="model",
             label_visibility="collapsed",
         )
 
@@ -335,10 +319,8 @@ def render_sidebar():
         )
 
         if uploaded and uploaded.name != st.session_state.pdf_name:
-
             with st.spinner("Parsing PDF..."):
                 text = extract_pdf_text(uploaded)
-
             if text:
                 st.session_state.pdf_text = text
                 st.session_state.pdf_name = uploaded.name
@@ -346,17 +328,15 @@ def render_sidebar():
 
         if st.session_state.pdf_name:
             chars = len(st.session_state.pdf_text)
-
             st.markdown(
-                f'''
+                f"""
                 <div class="pdf-info-box">
                 📄 {st.session_state.pdf_name}<br>
                 {chars:,} characters
                 </div>
-                ''',
-                unsafe_allow_html=True
+                """,
+                unsafe_allow_html=True,
             )
-
             if st.button("Remove PDF", use_container_width=True):
                 st.session_state.pdf_text = ""
                 st.session_state.pdf_name = ""
@@ -376,14 +356,11 @@ def render_sidebar():
 # ════════════════════════════════════════════════════════════
 
 def render_hero():
-
     st.markdown(
         """
         <div class="hero">
             <div class="hero-title">MeowBot AI</div>
-            <div class="hero-sub">
-                Futuristic AI Chatbot with PDF Intelligence
-            </div>
+            <div class="hero-sub">Futuristic AI Chatbot with PDF Intelligence</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -395,15 +372,12 @@ def render_hero():
 # ════════════════════════════════════════════════════════════
 
 def render_welcome():
-
     st.markdown(
         """
         <div class="welcome-card">
             <h2>🤖 Neural Core Ready</h2>
             <br>
-            <p>
-                Upload a PDF and ask questions, or chat normally with MeowBot AI.
-            </p>
+            <p>Upload a PDF and ask questions, or chat normally with MeowBot AI.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -415,7 +389,6 @@ def render_welcome():
 # ════════════════════════════════════════════════════════════
 
 def render_history():
-
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             render_chat_content(msg["content"])
@@ -426,14 +399,12 @@ def render_history():
 # ════════════════════════════════════════════════════════════
 
 def get_response(client, model, messages):
-
     response = client.chat.completions.create(
         model=model,
         messages=messages,
         temperature=0.7,
         max_tokens=2048,
     )
-
     return response.choices[0].message.content
 
 
@@ -442,9 +413,7 @@ def get_response(client, model, messages):
 # ════════════════════════════════════════════════════════════
 
 def main():
-
     init_session()
-
     st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
 
     final_api_key, model = render_sidebar()
@@ -459,32 +428,23 @@ def main():
     prompt = st.chat_input("Send a message to MeowBot AI...")
 
     if prompt:
-
         if not final_api_key:
-            st.error("No API key configured.")
+            st.error("❌ No API key configured. Add GROQ_API_KEY to your .env file or Streamlit secrets.")
             return
 
-        st.session_state.messages.append({
-            "role": "user",
-            "content": prompt
-        })
+        st.session_state.messages.append({"role": "user", "content": prompt})
 
         with st.chat_message("user"):
             render_chat_content(prompt)
 
-        final_prompt = build_prompt(
-            prompt,
-            st.session_state.pdf_text
-        )
+        final_prompt = build_prompt(prompt, st.session_state.pdf_text)
 
         api_messages = [
             {
                 "role": "system",
-                "content": (
-                    "You are MeowBot AI. "
-                    "Reply clearly and professionally."
-                ),
+                "content": "You are MeowBot AI. Reply clearly and professionally.",
             },
+            # history excluding the last user message (which we send as final_prompt)
             *[
                 {"role": m["role"], "content": m["content"]}
                 for m in st.session_state.messages[:-1]
@@ -493,36 +453,23 @@ def main():
         ]
 
         try:
-
             with st.spinner("Thinking..."):
-
                 client = build_client(final_api_key)
+                reply = get_response(client, model, api_messages)
 
-                reply = get_response(
-                    client,
-                    model,
-                    api_messages
-                )
-
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": reply
-            })
+            st.session_state.messages.append({"role": "assistant", "content": reply})
 
             with st.chat_message("assistant"):
                 render_chat_content(reply)
 
         except AuthenticationError:
-            st.error("Authentication failed. Invalid API key.")
-
+            st.error("❌ Authentication failed. Check your API key.")
         except APIConnectionError:
-            st.error("Connection error.")
-
+            st.error("❌ Connection error. Check your internet connection.")
         except APIStatusError as exc:
-            st.error(f"API error [{exc.status_code}]")
-
+            st.error(f"❌ API error [{exc.status_code}]: {exc.message}")
         except Exception as exc:
-            st.error(f"Unexpected error: {exc}")
+            st.error(f"❌ Unexpected error: {exc}")
 
 
 if __name__ == "__main__":
