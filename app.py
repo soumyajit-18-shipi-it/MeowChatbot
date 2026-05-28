@@ -276,6 +276,9 @@ def render_sidebar():
 
         # ── FIX: always initialise user_api_key, only overwrite when BYOK ──
         user_api_key = ""
+        # allow a temporary session-scoped key (entered on main page)
+        if "user_api_key" in st.session_state and not user_api_key:
+            user_api_key = st.session_state.get("user_api_key", "")
         if api_mode == "Bring Your Own API Key":
             user_api_key = st.text_input(
                 "Groq / OpenAI API Key",
@@ -429,7 +432,20 @@ def main():
 
     if prompt:
         if not final_api_key:
-            st.error("❌ No API key configured. Add GROQ_API_KEY to your .env file or Streamlit secrets.")
+            st.error("❌ No API key configured. Add GROQ_API_KEY to Streamlit Secrets or enter a key below for this session.")
+
+            with st.form("enter_key_form"):
+                temp = st.text_input("Enter Groq/OpenAI API key for this session", type="password", key="temp_api_key")
+                submit = st.form_submit_button("Use key for this session")
+
+                if submit:
+                    if temp and temp.strip():
+                        st.session_state["user_api_key"] = temp.strip()
+                        st.success("Using provided API key for this session. Re-running...")
+                        st.experimental_rerun()
+                    else:
+                        st.warning("Please paste a valid API key before submitting.")
+
             return
 
         st.session_state.messages.append({"role": "user", "content": prompt})
