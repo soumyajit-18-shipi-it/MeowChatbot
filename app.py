@@ -14,6 +14,27 @@ load_dotenv()
 
 
 def get_default_api_key() -> str:
+    """Return the default API key.
+
+    Priority order:
+    1. Streamlit secrets (st.secrets)
+    2. Environment variables (GROQ_API_KEY then OPENAI_API_KEY)
+    3. Empty string
+    """
+    # First check Streamlit secrets (works on Streamlit Cloud)
+    try:
+        groq = st.secrets.get("GROQ_API_KEY") if hasattr(st, "secrets") else None
+        openai = st.secrets.get("OPENAI_API_KEY") if hasattr(st, "secrets") else None
+    except Exception:
+        groq = None
+        openai = None
+
+    if groq:
+        return str(groq).strip()
+    if openai:
+        return str(openai).strip()
+
+    # Fallback to environment variables (for local dev using .env)
     return os.getenv("GROQ_API_KEY", "").strip() or os.getenv("OPENAI_API_KEY", "").strip()
 
 
@@ -195,10 +216,21 @@ def extract_pdf_text(uploaded_file) -> str:
 # ════════════════════════════════════════════════════════════
 
 def build_client(api_key: str) -> OpenAI:
-    return OpenAI(
-        api_key=api_key,
-        base_url="https://api.groq.com/openai/v1",
-    )
+    """Build an OpenAI-compatible client.
+
+    If the key appears to be a Groq key (prefix 'gsk_'), point the client at Groq's
+    OpenAI-compatible endpoint. Otherwise use the default OpenAI host.
+    """
+    api_key = (api_key or "").strip()
+    if not api_key:
+        raise ValueError("API key is required to build client")
+
+    # Simple prefix check to decide endpoint
+    if api_key.startswith("gsk_"):
+        return OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
+
+    # Default OpenAI endpoint
+    return OpenAI(api_key=api_key)
 
 
 # ════════════════════════════════════════════════════════════
