@@ -80,7 +80,7 @@ The design is inspired by futuristic AI operating systems and cyberpunk interfac
 
 Users can either:
 
-* Use the default API key from `.env`
+* Use the default API key from Streamlit Secrets or local environment variables
 * Enter their own Groq API key directly in the sidebar
 
 ### How it works
@@ -92,6 +92,15 @@ GROQ_API_KEY
 ```
 
 and user-provided keys from the sidebar input field.
+
+### Deployment note
+
+For Streamlit Cloud, do not commit a `.env` file. Add secrets in the app settings instead:
+
+* `GROQ_API_KEY`
+* `OPENAI_API_KEY` (optional fallback)
+
+The app reads Streamlit Secrets first, then falls back to local environment variables for development.
 
 ---
 
@@ -171,7 +180,7 @@ pip install -r requirements.txt
 
 # 🔑 Environment Variables
 
-Create a `.env` file:
+Create a local `.env` file for development only:
 
 ```env id="r4x6pr"
 GROQ_API_KEY=your_groq_api_key
@@ -180,6 +189,8 @@ GROQ_API_KEY=your_groq_api_key
 Get your API key from:
 
 https://console.groq.com/keys
+
+On Streamlit Cloud, configure the same key names in the app's Secrets panel instead of using `.env`.
 
 ---
 
