@@ -17,3 +17,4 @@ keybert
 umap-learn
 textstat
 regex
+protobuf<4

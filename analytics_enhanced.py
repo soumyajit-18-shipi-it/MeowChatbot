@@ -13,6 +13,8 @@ from sklearn.preprocessing import StandardScaler
 from collections import Counter
 import textstat
 import warnings
+from sklearn.feature_extraction.text import CountVectorizer
+import nltk
 
 warnings.filterwarnings('ignore')
 
@@ -33,14 +35,41 @@ def extract_advanced_keywords(text, embedding_model, top_n=15):
             diversity=0.5
         )
         return [kw[0] for kw in keywords]
-    except Exception as e:
-        st.warning(f"Keyword extraction failed: {e}")
-        from nltk import word_tokenize
-        from nltk.corpus import stopwords
-        tokens = word_tokenize(text.lower())
-        stop_words = set(stopwords.words('english'))
-        keywords = [t for t in tokens if len(t) > 4 and t not in stop_words]
-        return list(set(keywords))[:top_n]
+    except Exception:
+        # Robust fallback that doesn't require KeyBERT or NLTK corpora.
+        try:
+            vectorizer = CountVectorizer(stop_words="english", ngram_range=(1, 2), max_features=2000)
+            X = vectorizer.fit_transform([text.lower()])
+            freqs = zip(vectorizer.get_feature_names_out(), X.toarray()[0])
+            sorted_terms = sorted(freqs, key=lambda x: x[1], reverse=True)
+            keywords = [term for term, score in sorted_terms if len(term) > 3]
+            return keywords[:top_n]
+        except Exception:
+            try:
+                nltk.data.find('tokenizers/punkt_tab')
+            except Exception:
+                try:
+                    nltk.download('punkt_tab')
+                except Exception:
+                    pass
+            from nltk.tokenize import word_tokenize
+            from nltk.corpus import stopwords
+            try:
+                stop_words = set(stopwords.words('english'))
+            except Exception:
+                try:
+                    nltk.download('stopwords')
+                    stop_words = set(stopwords.words('english'))
+                except Exception:
+                    stop_words = set()
+
+            try:
+                tokens = word_tokenize(text.lower())
+            except Exception:
+                tokens = text.lower().split()
+
+            keywords = [token for token in tokens if token.isalpha() and len(token) > 4 and token not in stop_words]
+            return list(dict.fromkeys(keywords))[:top_n]
 
 
 def analyze_reading_complexity(text):

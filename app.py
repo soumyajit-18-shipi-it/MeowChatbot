@@ -7,12 +7,16 @@
 # ============================================================
 
 import os
+
+os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
+
 import fitz
 import chromadb
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+import streamlit.components.v1 as components
 import nltk
 
 from dotenv import load_dotenv
@@ -42,6 +46,16 @@ try:
     nltk.data.find('tokenizers/punkt')
 except LookupError:
     nltk.download('punkt')
+
+try:
+    nltk.data.find('tokenizers/punkt_tab')
+except LookupError:
+    nltk.download('punkt_tab')
+
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords')
 
 # ============================================================
 # ENV
@@ -111,7 +125,30 @@ html, body, [data-testid="stApp"] {
     backdrop-filter: blur(6px);
 }
 
-/* ── CHAT INPUT ── */
+/* ── CHAT INPUT — fixed to viewport bottom ── */
+[data-testid="stChatInput"] {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 999 !important;
+    padding: 0.6rem 1.2rem 0.6rem !important;
+    background: linear-gradient(
+        180deg,
+        rgba(14,11,26,0) 0%,
+        rgba(14,11,26,0.96) 18%,
+        rgba(14,11,26,1) 100%
+    ) !important;
+    /* Push it right of the sidebar (Streamlit sidebar default width ≈ 336px) */
+    margin-left: 336px !important;
+}
+
+[data-testid="stChatInput"] > div {
+    margin-bottom: 0 !important;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+}
+
 [data-testid="stChatInput"] textarea {
     background: rgba(255,255,255,0.06) !important;
     border: 1px solid var(--border) !important;
@@ -123,6 +160,11 @@ html, body, [data-testid="stApp"] {
 [data-testid="stChatInput"] textarea:focus {
     border-color: var(--accent) !important;
     box-shadow: 0 0 0 2px rgba(192,132,252,0.15) !important;
+}
+
+/* ── Extra bottom padding so last message isn't hidden behind fixed bar ── */
+[data-testid="stVerticalBlock"] {
+    padding-bottom: 90px !important;
 }
 
 /* ── BUTTONS ── */
@@ -356,7 +398,10 @@ def ensure_models_loaded():
 @st.cache_resource
 def get_chroma_collection():
     client = chromadb.Client()
-    return client.get_or_create_collection(name="meowbot_pdf")
+    return client.get_or_create_collection(
+        name="meowbot_pdf",
+        metadata={"hnsw:space": "cosine"},
+    )
 
 collection = get_chroma_collection()
 
@@ -400,7 +445,6 @@ def create_embeddings(chunks):
 
 def store_chunks(chunks):
     try:
-        # Get all existing IDs and delete them
         existing = collection.get()
         if existing and existing["ids"]:
             collection.delete(ids=existing["ids"])
@@ -411,21 +455,91 @@ def store_chunks(chunks):
     ids = [f"chunk_{i}" for i in range(len(chunks))]
     collection.add(documents=chunks, embeddings=embeddings.tolist(), ids=ids)
 
+
+RAG_RELEVANCE_THRESHOLD = 0.45
+RAG_MAX_CHUNKS = 4
+
+
+def build_hybrid_system_prompt():
+    return """You are MeowBot, a helpful and conversational AI assistant with hybrid RAG behavior.
+
+Use uploaded PDF context only when it is clearly relevant to the user's question.
+If the retrieved PDF context is strong and relevant, weave it naturally into the answer and keep the response grounded in the document.
+If the retrieved context is weak, tangential, or unrelated, ignore it and answer using your own general knowledge.
+
+Rules:
+- Prefer PDF context for document-specific facts, names, numbers, quotes, and summaries.
+- Blend PDF context with general knowledge when both are useful.
+- Never invent PDF details that are not supported by the retrieved context.
+- Never mention retrieval scores, missing context, or internal retrieval failures.
+- Never say the answer is not found in the document unless the user explicitly asks about the document contents.
+- Stay natural, concise when appropriate, and conversational.
+- Always try to help the user directly.
+"""
+
+
+def format_retrieved_context(chunks, scores):
+    lines = []
+    for index, chunk in enumerate(chunks, 1):
+        score = scores[index - 1] if index - 1 < len(scores) else 0.0
+        lines.append(f"[Context {index} | relevance={score:.2f}] {chunk}")
+    return "\n\n".join(lines)
+
 # ============================================================
 # RETRIEVAL
 # ============================================================
 
-def retrieve_relevant_chunks(query, n_results=4):
+def retrieve_relevant_chunks(query, n_results=RAG_MAX_CHUNKS, relevance_threshold=RAG_RELEVANCE_THRESHOLD):
     ensure_models_loaded()
     if embedding_model is None:
-        return ["Embedding model not available. Please refresh the page."]
+        return {
+            "chunks": [],
+            "scores": [],
+            "best_score": 0.0,
+            "mean_score": 0.0,
+            "use_context": False,
+        }
+
     try:
         query_embedding = embedding_model.encode([query])
-        results = collection.query(query_embeddings=query_embedding.tolist(), n_results=n_results)
-        return results["documents"][0]
+        results = collection.query(
+            query_embeddings=query_embedding.tolist(),
+            n_results=n_results,
+            include=["documents", "distances"],
+        )
+
+        documents = results.get("documents", [[]])[0] or []
+        distances = results.get("distances", [[]])[0] or []
+
+        scored_chunks = []
+        for document, distance in zip(documents, distances):
+            try:
+                similarity = 1.0 - float(distance)
+            except (TypeError, ValueError):
+                similarity = 0.0
+            scored_chunks.append((document, max(0.0, similarity)))
+
+        relevant_chunks = [chunk for chunk, score in scored_chunks if score >= relevance_threshold]
+        relevant_scores = [score for chunk, score in scored_chunks if score >= relevance_threshold]
+        best_score = max((score for _, score in scored_chunks), default=0.0)
+        mean_score = float(np.mean(relevant_scores)) if relevant_scores else 0.0
+
+        return {
+            "chunks": relevant_chunks,
+            "scores": relevant_scores,
+            "best_score": best_score,
+            "mean_score": mean_score,
+            "use_context": bool(relevant_chunks),
+        }
     except Exception as e:
         st.error(f"Error retrieving chunks: {e}")
-        return ["Error retrieving relevant information."]
+        return {
+            "chunks": [],
+            "scores": [],
+            "best_score": 0.0,
+            "mean_score": 0.0,
+            "use_context": False,
+        }
 
 # ============================================================
 # NLP
@@ -455,7 +569,6 @@ def render_analytics_dashboard(text, embedding_model, sentiment_pipeline):
     st.markdown("---")
     st.markdown("### 🤖 AI Document Intelligence Dashboard")
     
-    # Create tabs for different analytics
     tab1, tab2, tab3, tab4 = st.tabs(["📊 Content Analysis", "💭 Sentiment & Tone", "🗺️ Semantic Map", "✨ AI Insights"])
     
     with tab1:
@@ -464,7 +577,6 @@ def render_analytics_dashboard(text, embedding_model, sentiment_pipeline):
         col1, col2 = st.columns(2)
         
         with col1:
-            # Advanced Keywords
             try:
                 with st.spinner("Extracting keywords..."):
                     keywords = extract_advanced_keywords(text, embedding_model, top_n=12)
@@ -476,7 +588,6 @@ def render_analytics_dashboard(text, embedding_model, sentiment_pipeline):
                 st.error(f"Keyword extraction failed: {e}")
         
         with col2:
-            # Document Complexity
             try:
                 complexity = analyze_reading_complexity(text)
                 st.metric("📖 Readability Score", f"{complexity['flesch_score']}", complexity['complexity'])
@@ -485,7 +596,6 @@ def render_analytics_dashboard(text, embedding_model, sentiment_pipeline):
             except Exception as e:
                 st.warning(f"Complexity analysis failed: {e}")
         
-        # Named Entity Recognition
         try:
             st.subheader("Named Entities Detected")
             entities = extract_entities(text)
@@ -512,7 +622,6 @@ def render_analytics_dashboard(text, embedding_model, sentiment_pipeline):
         col1, col2 = st.columns(2)
         
         with col1:
-            # Sentiment Analysis
             try:
                 sentiment = analyze_emotional_tone(text, sentiment_pipeline)
                 if sentiment:
@@ -524,7 +633,6 @@ def render_analytics_dashboard(text, embedding_model, sentiment_pipeline):
                 st.warning(f"Sentiment analysis failed: {e}")
         
         with col2:
-            # Writing Tone
             try:
                 tone = detect_document_tone(text)
                 st.metric("📝 Writing Tone", tone.get("primary_tone", "Unknown"))
@@ -540,10 +648,7 @@ def render_analytics_dashboard(text, embedding_model, sentiment_pipeline):
         st.subheader("Semantic Document Clustering")
         
         try:
-            # Create semantic embeddings
-            embedding_model.encode(text[:100])  # Test embedding
-            
-            # For proper clustering, we'd use chunks - this is simplified
+            embedding_model.encode(text[:100])
             st.info("🗺️ Semantic map requires PDF chunks for visualization. Upload a PDF to see the interactive semantic map.")
             
         except Exception as e:
@@ -558,7 +663,6 @@ def render_analytics_dashboard(text, embedding_model, sentiment_pipeline):
                 insights_text = format_insights_text(insights)
                 st.markdown(insights_text)
                 
-                # Suggested questions
                 st.markdown("**💡 Suggested Questions to Ask:**")
                 themes = insights.get("main_themes", [])
                 if themes:
@@ -578,15 +682,12 @@ def render_semantic_clustering(chunks, embeddings):
             st.info("Not enough chunks for clustering (minimum 3 required)")
             return
         
-        # Create semantic map
         cluster_df = create_semantic_map(embeddings, chunks, n_clusters=min(5, len(chunks)))
         
         if cluster_df is not None:
-            # Interactive semantic map
             fig = plot_semantic_map(cluster_df)
             st.plotly_chart(fig, use_container_width=True)
             
-            # Cluster summary
             st.markdown("**Cluster Summary:**")
             for cluster_name in cluster_df['cluster_name'].unique():
                 cluster_chunks_list = cluster_df[cluster_df['cluster_name'] == cluster_name]['text_preview'].tolist()
@@ -602,25 +703,38 @@ def render_semantic_clustering(chunks, embeddings):
 # PROMPT
 # ============================================================
 
-def build_prompt(user_input):
-    relevant_chunks = retrieve_relevant_chunks(user_input)
-    context = "\n\n".join(relevant_chunks)
-    return f"""You are MeowBot — a friendly AI research assistant.
+def build_prompt(user_input, retrieval_result=None):
+    messages = [
+        {"role": "system", "content": build_hybrid_system_prompt()},
+    ]
 
-Use the retrieved context below to answer accurately.
+    if retrieval_result and retrieval_result.get("use_context"):
+        context = format_retrieved_context(
+            retrieval_result.get("chunks", []),
+            retrieval_result.get("scores", []),
+        )
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    f"User question:\n{user_input}\n\n"
+                    f"Relevant PDF excerpts:\n{context}\n\n"
+                    "Use the PDF excerpts when they help answer the question. "
+                    "If the excerpts do not cover part of the answer, rely on your own general knowledge and keep the response natural."
+                ),
+            }
+        )
+    else:
+        messages.append({"role": "user", "content": user_input})
 
-CONTEXT:
-{context}
-
-QUESTION:
-{user_input}
-"""
+    return messages
 
 # ============================================================
 # LLM RESPONSE
 # ============================================================
 
-def generate_response(client, model, messages):
+def generate_response(client, model, user_input, retrieval_result=None):
+    messages = build_prompt(user_input, retrieval_result)
     response = client.chat.completions.create(
         model=model,
         messages=messages,
@@ -629,6 +743,41 @@ def generate_response(client, model, messages):
         top_p=st.session_state.top_p,
     )
     return response.choices[0].message.content
+
+
+def scroll_chat_to_bottom():
+        """Scroll the viewport to the end of the latest rendered chat message."""
+        components.html(
+                """
+                <script>
+                    const scrollLatestMessage = () => {
+                        const messages = window.parent.document.querySelectorAll('[data-testid="stChatMessage"]');
+                        const lastMessage = messages.length ? messages[messages.length - 1] : null;
+
+                        if (lastMessage) {
+                            lastMessage.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                            return;
+                        }
+
+                        const fallbackTargets = [
+                            window.parent.document.querySelector('section.main'),
+                            window.parent.document.querySelector('[data-testid="stAppViewContainer"]'),
+                            window.parent.document.scrollingElement,
+                            window.parent.document.documentElement,
+                        ].filter(Boolean);
+
+                        for (const target of fallbackTargets) {
+                            try {
+                                target.scrollTop = target.scrollHeight;
+                            } catch (error) {}
+                        }
+                    };
+
+                    requestAnimationFrame(() => setTimeout(scrollLatestMessage, 50));
+                </script>
+                """,
+                height=0,
+        )
 
 # ============================================================
 # MEOW EASTER EGG
@@ -650,6 +799,8 @@ st.markdown("""
     <div class="paws">🐾 🐾 🐾</div>
 </div>
 """, unsafe_allow_html=True)
+
+chat_tab, analytics_tab = st.tabs(["💬 Chat", "📊 Document Analysis"])
 
 # ============================================================
 # SIDEBAR
@@ -714,71 +865,70 @@ background:linear-gradient(90deg,#c084fc,#f472b6);-webkit-background-clip:text;
         st.session_state.messages = []
         st.rerun()
 
-# ============================================================
-# CHAT HISTORY
-# ============================================================
+with chat_tab:
+    # ============================================================
+    # CHAT HISTORY
+    # ============================================================
 
-for msg in st.session_state.messages:
-    avatar = "🐱" if msg["role"] == "assistant" else "🧑"
-    with st.chat_message(msg["role"], avatar=avatar):
-        st.markdown(msg["content"], unsafe_allow_html=True)
+    for msg in st.session_state.messages:
+        avatar = "🐱" if msg["role"] == "assistant" else "🧑"
+        with st.chat_message(msg["role"], avatar=avatar):
+            st.markdown(msg["content"], unsafe_allow_html=True)
 
-# ============================================================
-# CHAT INPUT
-# ============================================================
+    # ============================================================
+    # CHAT INPUT
+    # ============================================================
 
-prompt = st.chat_input("Ask MeowBot... or just say meow 🐾")
+    prompt = st.chat_input("Ask MeowBot... or just say meow 🐾")
 
-if prompt:
+    if prompt:
 
-    if not api_key:
-        st.error("🔑 Please set GROQ_API_KEY or OPENAI_API_KEY in your .env file")
-        st.stop()
+        if not api_key:
+            st.error("🔑 Please set GROQ_API_KEY or OPENAI_API_KEY in your .env file")
+            st.stop()
 
-    # Store user message
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user", avatar="🧑"):
-        st.markdown(prompt)
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user", avatar="🧑"):
+            st.markdown(prompt)
 
-    # ── MEOW EASTER EGG ──────────────────────────────────────
-    if is_meow(prompt):
-        meow_response = '<span class="meow-reply">meow</span> 🐾'
-        st.session_state.messages.append({"role": "assistant", "content": meow_response})
-        with st.chat_message("assistant", avatar="🐱"):
-            st.markdown(meow_response, unsafe_allow_html=True)
+        # ── MEOW EASTER EGG ──────────────────────────────────────
+        if is_meow(prompt):
+            meow_response = '<span class="meow-reply">meow</span> 🐾'
+            st.session_state.messages.append({"role": "assistant", "content": meow_response})
+            with st.chat_message("assistant", avatar="🐱"):
+                st.markdown(meow_response, unsafe_allow_html=True)
+            scroll_chat_to_bottom()
 
-    # ── NORMAL RAG RESPONSE ───────────────────────────────────
+        # ── NORMAL RAG RESPONSE ───────────────────────────────────
+        else:
+            retrieval_result = retrieve_relevant_chunks(prompt)
+
+            with st.spinner("🐱 MeowBot is thinking..."):
+                client   = build_client(api_key)
+                response = generate_response(client, model, prompt, retrieval_result)
+
+            st.session_state.messages.append({"role": "assistant", "content": response})
+            with st.chat_message("assistant", avatar="🐱"):
+                st.markdown(response)
+            scroll_chat_to_bottom()
+
+with analytics_tab:
+    # ============================================================
+    # ANALYTICS DASHBOARD
+    # ============================================================
+
+    if st.session_state.pdf_text:
+        ensure_models_loaded()
+        render_analytics_dashboard(
+            st.session_state.pdf_text[:5000],
+            embedding_model,
+            sentiment_pipeline
+        )
+
+        if len(st.session_state.chunks) >= 3:
+            st.markdown("---")
+            st.markdown("### 🗺️ Semantic Clustering Analysis")
+            embeddings = create_embeddings(st.session_state.chunks[:30])
+            render_semantic_clustering(st.session_state.chunks[:30], embeddings)
     else:
-        final_prompt = build_prompt(prompt)
-        api_messages = [
-            {"role": "system", "content": "You are MeowBot — a friendly and helpful AI research assistant. Be concise and accurate."},
-            {"role": "user",   "content": final_prompt},
-        ]
-
-        with st.spinner("🐱 MeowBot is thinking..."):
-            client   = build_client(api_key)
-            response = generate_response(client, model, api_messages)
-
-        st.session_state.messages.append({"role": "assistant", "content": response})
-        with st.chat_message("assistant", avatar="🐱"):
-            st.markdown(response)
-
-# ============================================================
-# ANALYTICS DASHBOARD
-# ============================================================
-
-if st.session_state.pdf_text:
-    st.divider()
-    
-    ensure_models_loaded()
-    render_analytics_dashboard(
-        st.session_state.pdf_text[:5000],
-        embedding_model,
-        sentiment_pipeline
-    )
-    
-    if len(st.session_state.chunks) >= 3:
-        st.markdown("---")
-        st.markdown("### 🗺️ Semantic Clustering Analysis")
-        embeddings = create_embeddings(st.session_state.chunks[:30])
-        render_semantic_clustering(st.session_state.chunks[:30], embeddings)
+        st.info("Upload a PDF in the sidebar to unlock the document intelligence dashboard.")
