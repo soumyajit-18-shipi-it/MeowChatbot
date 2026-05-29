@@ -292,3 +292,11 @@ MIT License
 
 Soumyajit Rout
 BITS Pilani — Computer Science
+
+---
+
+## Security
+
+- The repository previously contained a `.env` file which has been removed from the commit history and added to `.gitignore`.
+- Do not commit secrets. Use `SECRETS_ROTATION.md` for immediate rotation steps and guidance on revoking exposed keys.
+
