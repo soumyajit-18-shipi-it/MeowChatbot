@@ -1,505 +1,784 @@
 # ============================================================
-#  MeowBot AI — Futuristic PDF Chatbot
-#  Stack : Streamlit · Groq (OpenAI-compat) · PyMuPDF · dotenv
+#  MEOWBOT AI X
+#  Advanced RAG + NLP + Analytics Chatbot
+#  Stack:
+#  Streamlit · Groq/OpenAI · ChromaDB · SentenceTransformers
+#  PyMuPDF · Transformers · Plotly · Scikit-learn
 # ============================================================
 
 import os
+import fitz
+import chromadb
+import numpy as np
+import pandas as pd
+import plotly.express as px
 import streamlit as st
-from openai import OpenAI, AuthenticationError, APIConnectionError, APIStatusError
+import nltk
+
 from dotenv import load_dotenv
-import fitz  # PyMuPDF
-
-# ── env ─────────────────────────────────────────────────────
-load_dotenv()
-
-
-def get_default_api_key() -> str:
-    try:
-        groq = st.secrets.get("GROQ_API_KEY") if hasattr(st, "secrets") else None
-        openai_key = st.secrets.get("OPENAI_API_KEY") if hasattr(st, "secrets") else None
-    except Exception:
-        groq = None
-        openai_key = None
-
-    if groq:
-        return str(groq).strip()
-    if openai_key:
-        return str(openai_key).strip()
-
-    return os.getenv("GROQ_API_KEY", "").strip() or os.getenv("OPENAI_API_KEY", "").strip()
-
-
-# ── page config ─────────────────────────────────────────────
-st.set_page_config(
-    page_title="MeowBot AI",
-    page_icon="🤖",
-    layout="wide",
-    initial_sidebar_state="expanded",
+from openai import OpenAI
+from sentence_transformers import SentenceTransformer
+from transformers import pipeline
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.cluster import KMeans
+from nltk.tokenize import word_tokenize
+from collections import Counter
+from analytics_enhanced import (
+    extract_advanced_keywords,
+    analyze_reading_complexity,
+    extract_entities,
+    analyze_emotional_tone,
+    detect_document_tone,
+    create_semantic_map,
+    generate_ai_insights,
+    format_insights_text,
+    plot_advanced_keywords,
+    plot_semantic_map,
+    plot_sentiment_gauge,
+    plot_document_complexity
 )
 
-# ════════════════════════════════════════════════════════════
-#  GLOBAL CSS
-# ════════════════════════════════════════════════════════════
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+
+# ============================================================
+# ENV
+# ============================================================
+
+load_dotenv()
+
+# ============================================================
+# PAGE CONFIG
+# ============================================================
+
+st.set_page_config(
+    page_title="MeowBot",
+    page_icon="🐱",
+    layout="wide",
+)
+
+# ============================================================
+# CSS
+# ============================================================
 
 GLOBAL_CSS = """
 <style>
 
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700&display=swap');
 
 :root {
-  --navy: #020818;
-  --panel: #0d1f3c;
-  --cyan: #00f5ff;
-  --blue: #0066ff;
-  --purple: #7b2fff;
-  --text: #c8d8f0;
-  --text-dim: #6a8aaa;
-  --border: rgba(0,245,255,0.18);
-  --glass: rgba(13,31,60,0.55);
+    --bg: #0e0b1a;
+    --panel: #16122a;
+    --accent: #c084fc;
+    --pink: #f472b6;
+    --text: #e9d5ff;
+    --muted: #a78bfa;
+    --border: rgba(192,132,252,0.2);
+    --green: #4ade80;
 }
 
 html, body, [data-testid="stApp"] {
-  background: var(--navy) !important;
-  font-family: 'Rajdhani', sans-serif !important;
-  color: var(--text) !important;
-}
-
-[data-testid="stApp"]::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(rgba(0,245,255,0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,245,255,0.03) 1px, transparent 1px);
-  background-size: 48px 48px;
-}
-
-[data-testid="stMainBlockContainer"] {
-  position: relative;
-  z-index: 1;
-  max-width: 1200px !important;
-  padding: 1.5rem 2rem 4rem !important;
-}
-
-[data-testid="stChatMessage"] {
-  background: var(--glass) !important;
-  border: 1px solid var(--border) !important;
-  border-radius: 16px !important;
-  padding: 1rem 1.2rem !important;
-  margin-bottom: 1rem !important;
-  overflow-wrap: break-word !important;
-  word-break: break-word !important;
-}
-
-[data-testid="stChatMessage"] * {
-  overflow-wrap: break-word !important;
-  word-break: break-word !important;
-  white-space: pre-wrap !important;
-}
-
-[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) {
-  border-left: 3px solid var(--cyan) !important;
-}
-
-[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
-  border-left: 3px solid var(--blue) !important;
-}
-
-[data-testid="stChatMessage"] p,
-[data-testid="stChatMessage"] li,
-[data-testid="stChatMessage"] span {
-  line-height: 1.8 !important;
-  font-size: 1rem !important;
-  color: var(--text) !important;
-}
-
-[data-testid="stChatMessage"] pre {
-  overflow-x: auto !important;
-  white-space: pre-wrap !important;
-}
-
-[data-testid="stChatInput"] {
-  border-radius: 14px !important;
-  border: 1px solid var(--border) !important;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Nunito', sans-serif;
 }
 
 [data-testid="stSidebar"] {
-  background: rgba(10,22,40,0.9) !important;
-  border-right: 1px solid var(--border) !important;
+    background: #0a0815;
+    border-right: 1px solid var(--border);
 }
 
+/* ── SIDEBAR LABELS ── */
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] .stMarkdown p {
+    color: var(--muted) !important;
+    font-family: 'Nunito', sans-serif;
+}
+
+/* ── SLIDERS ── */
+[data-testid="stSlider"] [data-baseweb="slider"] [data-testid="stThumbValue"] {
+    color: var(--accent) !important;
+}
+
+/* ── CHAT MESSAGES ── */
+[data-testid="stChatMessage"] {
+    background: rgba(22,18,42,0.6);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 12px 16px;
+    backdrop-filter: blur(6px);
+}
+
+/* ── CHAT INPUT ── */
+[data-testid="stChatInput"] textarea {
+    background: rgba(255,255,255,0.06) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 24px !important;
+    color: var(--text) !important;
+    font-family: 'Nunito', sans-serif !important;
+}
+
+[data-testid="stChatInput"] textarea:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 2px rgba(192,132,252,0.15) !important;
+}
+
+/* ── BUTTONS ── */
+.stButton > button {
+    background: linear-gradient(135deg, #7c3aed, #db2777) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 12px !important;
+    font-family: 'Nunito', sans-serif !important;
+    font-weight: 700 !important;
+    transition: transform 0.15s, opacity 0.15s;
+}
+
+.stButton > button:hover {
+    opacity: 0.88 !important;
+    transform: scale(1.02);
+}
+
+/* ── DIVIDER ── */
+hr {
+    border-color: var(--border) !important;
+}
+
+/* ── HERO ── */
 .hero {
-  text-align: center;
-  padding: 2rem 1rem;
+    text-align: center;
+    padding: 1.8rem 1rem 1rem;
 }
 
-.hero-title {
-  font-family: 'Orbitron', monospace;
-  font-size: clamp(2rem, 5vw, 3.5rem);
-  font-weight: 900;
-  background: linear-gradient(135deg, #fff 0%, var(--cyan) 40%, var(--blue) 80%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+.hero h1 {
+    font-family: 'Fredoka One', cursive;
+    font-size: 2.8rem;
+    background: linear-gradient(90deg, #c084fc, #f472b6, #c084fc);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-size: 200% auto;
+    animation: shimmer 3s linear infinite;
+    margin: 0;
 }
 
-.hero-sub {
-  color: var(--text-dim);
-  margin-top: 0.7rem;
+@keyframes shimmer {
+    0%   { background-position: 0% center; }
+    100% { background-position: 200% center; }
 }
 
-.welcome-card {
-  padding: 2rem;
-  border-radius: 18px;
-  border: 1px solid var(--border);
-  background: var(--glass);
-  text-align: center;
-  margin-top: 2rem;
+.hero p {
+    color: var(--muted);
+    margin: 0.4rem 0 0 0;
+    font-size: 1rem;
 }
 
-.sidebar-logo {
-  font-family: 'Orbitron', monospace;
-  font-size: 1.2rem;
-  font-weight: 800;
-  color: var(--cyan);
+.hero .paws {
+    font-size: 1.4rem;
+    letter-spacing: 6px;
+    margin-top: 4px;
+    opacity: 0.5;
 }
 
-.sidebar-section {
-  margin-top: 1.5rem;
-  margin-bottom: 0.6rem;
-  font-size: 0.8rem;
-  color: var(--cyan);
-  letter-spacing: 0.15em;
+/* ── CARD ── */
+.card {
+    background: rgba(22,18,42,0.7);
+    border: 1px solid var(--border);
+    padding: 1rem;
+    border-radius: 18px;
 }
 
-.pdf-info-box {
-  padding: 0.8rem;
-  border-radius: 10px;
-  border: 1px dashed var(--border);
-  background: rgba(0,245,255,0.04);
-  margin-top: 1rem;
+/* ── STATUS BADGE ── */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(74,222,128,0.1);
+    border: 1px solid rgba(74,222,128,0.3);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 0.75rem;
+    color: var(--green);
+    font-weight: 700;
+}
+
+.status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.5; transform: scale(0.75); }
+}
+
+/* ── CAT BG ── */
+.chat-bg-wrapper {
+    position: relative;
+}
+
+.cat-watermark {
+    position: fixed;
+    bottom: 90px;
+    right: 30px;
+    opacity: 0.055;
+    pointer-events: none;
+    z-index: 0;
+    font-size: 260px;
+    line-height: 1;
+    filter: grayscale(1);
+    user-select: none;
+}
+
+/* ── MEOW REPLY ── */
+.meow-reply {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.6rem;
+    background: linear-gradient(90deg, #c084fc, #f472b6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* ── TIP BOX ── */
+.tip-box {
+    background: rgba(192,132,252,0.08);
+    border: 1px solid rgba(192,132,252,0.25);
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 8px;
+}
+
+/* ── FILE UPLOADER ── */
+[data-testid="stFileUploader"] {
+    border: 1.5px dashed var(--border) !important;
+    border-radius: 14px !important;
+    background: rgba(22,18,42,0.5) !important;
+}
+
+/* ── SELECTBOX / INPUTS ── */
+[data-testid="stSelectbox"] > div,
+[data-testid="stTextInput"] input {
+    background: rgba(255,255,255,0.06) !important;
+    border-color: var(--border) !important;
+    color: var(--text) !important;
+    font-family: 'Nunito', sans-serif !important;
+}
+
+/* ── PLOTLY CHARTS ── */
+.js-plotly-plot .plotly .bg {
+    fill: transparent !important;
 }
 
 </style>
+
+<!-- Fixed cat watermark behind chat -->
+<div class="cat-watermark">🐱</div>
 """
 
-# ════════════════════════════════════════════════════════════
-# PDF HELPERS
-# ════════════════════════════════════════════════════════════
+st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
 
-def extract_pdf_text(uploaded_file) -> str:
-    try:
-        pdf_bytes = uploaded_file.read()
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        pages = [page.get_text() for page in doc]
-        doc.close()
-        return "\n\n".join(pages)
-    except Exception as exc:
-        st.error(f"PDF parse error: {exc}")
-        return ""
+# ============================================================
+# SESSION
+# ============================================================
 
+defaults = {
+    "messages": [],
+    "pdf_text": "",
+    "chunks": [],
+    "temperature": 0.7,
+    "max_tokens": 2048,
+    "top_p": 1.0,
+}
 
-# ════════════════════════════════════════════════════════════
-# GROQ CLIENT
-# ════════════════════════════════════════════════════════════
+for key, val in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = val
 
-def build_client(api_key: str) -> OpenAI:
-    api_key = (api_key or "").strip()
-    if not api_key:
-        raise ValueError("API key is required to build client")
+# ============================================================
+# API KEY
+# ============================================================
 
+def get_api_key():
+    return (
+        os.getenv("GROQ_API_KEY", "").strip()
+        or os.getenv("OPENAI_API_KEY", "").strip()
+    )
+
+# ============================================================
+# CLIENT
+# ============================================================
+
+def build_client(api_key):
     if api_key.startswith("gsk_"):
         return OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
-
     return OpenAI(api_key=api_key)
 
+# ============================================================
+# MODELS
+# ============================================================
 
-# ════════════════════════════════════════════════════════════
+@st.cache_resource
+def load_embedding_model():
+    try:
+        return SentenceTransformer("all-MiniLM-L6-v2")
+    except Exception as e:
+        st.error(f"Error loading embedding model: {e}")
+        return None
+
+@st.cache_resource
+def load_sentiment_model():
+    try:
+        return pipeline("sentiment-analysis")
+    except Exception as e:
+        st.error(f"Error loading sentiment model: {e}")
+        return None
+
+embedding_model = None
+sentiment_pipeline = None
+
+def ensure_models_loaded():
+    global embedding_model, sentiment_pipeline
+    if embedding_model is None:
+        embedding_model = load_embedding_model()
+    if sentiment_pipeline is None:
+        sentiment_pipeline = load_sentiment_model()
+
+# ============================================================
+# VECTOR DB
+# ============================================================
+
+@st.cache_resource
+def get_chroma_collection():
+    client = chromadb.Client()
+    return client.get_or_create_collection(name="meowbot_pdf")
+
+collection = get_chroma_collection()
+
+# ============================================================
+# PDF
+# ============================================================
+
+def extract_pdf_text(uploaded_file):
+    pdf_bytes = uploaded_file.read()
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    pages = [page.get_text() for page in doc]
+    doc.close()
+    return "\n".join(pages)
+
+# ============================================================
+# CHUNKING
+# ============================================================
+
+def chunk_text(text, chunk_size=500):
+    words = text.split()
+    return [" ".join(words[i:i+chunk_size]) for i in range(0, len(words), chunk_size)]
+
+# ============================================================
+# EMBEDDINGS
+# ============================================================
+
+def create_embeddings(chunks):
+    ensure_models_loaded()
+    if embedding_model is None:
+        st.error("Embedding model not loaded")
+        return np.zeros((len(chunks), 384))
+    try:
+        return embedding_model.encode(chunks)
+    except Exception as e:
+        st.error(f"Error creating embeddings: {e}")
+        return np.zeros((len(chunks), 384))
+
+# ============================================================
+# VECTOR STORE
+# ============================================================
+
+def store_chunks(chunks):
+    try:
+        # Get all existing IDs and delete them
+        existing = collection.get()
+        if existing and existing["ids"]:
+            collection.delete(ids=existing["ids"])
+    except Exception as e:
+        st.warning(f"Could not clear old chunks: {e}")
+    
+    embeddings = create_embeddings(chunks)
+    ids = [f"chunk_{i}" for i in range(len(chunks))]
+    collection.add(documents=chunks, embeddings=embeddings.tolist(), ids=ids)
+
+# ============================================================
+# RETRIEVAL
+# ============================================================
+
+def retrieve_relevant_chunks(query, n_results=4):
+    ensure_models_loaded()
+    if embedding_model is None:
+        return ["Embedding model not available. Please refresh the page."]
+    try:
+        query_embedding = embedding_model.encode([query])
+        results = collection.query(query_embeddings=query_embedding.tolist(), n_results=n_results)
+        return results["documents"][0]
+    except Exception as e:
+        st.error(f"Error retrieving chunks: {e}")
+        return ["Error retrieving relevant information."]
+
+# ============================================================
+# NLP
+# ============================================================
+
+def tokenize_text(text):
+    try:
+        return word_tokenize(text)
+    except:
+        return text.split()
+
+def get_word_frequencies(tokens):
+    return Counter(tokens)
+
+def bag_of_words(text):
+    vectorizer = CountVectorizer(stop_words="english")
+    X = vectorizer.fit_transform([text])
+    return vectorizer, X
+
+# ============================================================
+# ANALYTICS DASHBOARD - ENHANCED
+# ============================================================
+
+def render_analytics_dashboard(text, embedding_model, sentiment_pipeline):
+    """Render comprehensive AI analytics dashboard"""
+    
+    st.markdown("---")
+    st.markdown("### 🤖 AI Document Intelligence Dashboard")
+    
+    # Create tabs for different analytics
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 Content Analysis", "💭 Sentiment & Tone", "🗺️ Semantic Map", "✨ AI Insights"])
+    
+    with tab1:
+        st.subheader("Content Analysis")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Advanced Keywords
+            try:
+                with st.spinner("Extracting keywords..."):
+                    keywords = extract_advanced_keywords(text, embedding_model, top_n=12)
+                    keyword_freq = [text.lower().count(kw.lower()) for kw in keywords]
+                    
+                    fig = plot_advanced_keywords(keywords, keyword_freq)
+                    st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.error(f"Keyword extraction failed: {e}")
+        
+        with col2:
+            # Document Complexity
+            try:
+                complexity = analyze_reading_complexity(text)
+                st.metric("📖 Readability Score", f"{complexity['flesch_score']}", complexity['complexity'])
+                st.metric("⏱️ Reading Time", complexity['reading_time'])
+                st.metric("📏 Avg Sentence Length", f"{complexity['avg_sentence_length']} words")
+            except Exception as e:
+                st.warning(f"Complexity analysis failed: {e}")
+        
+        # Named Entity Recognition
+        try:
+            st.subheader("Named Entities Detected")
+            entities = extract_entities(text)
+            
+            if entities and "error" not in entities:
+                cols = st.columns(min(5, len([e for e in entities.values() if e])))
+                entity_types = {"ORG": "🏢", "PERSON": "👤", "GPE": "📍", "PRODUCT": "📦", "EVENT": "📅"}
+                
+                col_idx = 0
+                for entity_type, entity_list in entities.items():
+                    if entity_list and col_idx < len(cols):
+                        with cols[col_idx]:
+                            emoji = entity_types.get(entity_type, "📌")
+                            st.write(f"**{emoji} {entity_type}**")
+                            for entity in entity_list:
+                                st.caption(entity)
+                        col_idx += 1
+        except Exception as e:
+            st.warning(f"Entity recognition unavailable: {e}")
+    
+    with tab2:
+        st.subheader("Sentiment & Emotional Analysis")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Sentiment Analysis
+            try:
+                sentiment = analyze_emotional_tone(text, sentiment_pipeline)
+                if sentiment:
+                    fig = plot_sentiment_gauge(sentiment)
+                    if fig:
+                        st.plotly_chart(fig, use_container_width=True)
+                    st.markdown(f"**Confidence Score:** {sentiment['confidence']}%")
+            except Exception as e:
+                st.warning(f"Sentiment analysis failed: {e}")
+        
+        with col2:
+            # Writing Tone
+            try:
+                tone = detect_document_tone(text)
+                st.metric("📝 Writing Tone", tone.get("primary_tone", "Unknown"))
+                st.metric("🎓 Formality Score", f"{tone.get('formality_score', 0)}/100")
+                
+                st.markdown("**Tone Indicators:**")
+                for tone_type, count in tone.get("indicators", {}).items():
+                    st.write(f"- {tone_type.title()}: {count} occurrences")
+            except Exception as e:
+                st.warning(f"Tone analysis failed: {e}")
+    
+    with tab3:
+        st.subheader("Semantic Document Clustering")
+        
+        try:
+            # Create semantic embeddings
+            embedding_model.encode(text[:100])  # Test embedding
+            
+            # For proper clustering, we'd use chunks - this is simplified
+            st.info("🗺️ Semantic map requires PDF chunks for visualization. Upload a PDF to see the interactive semantic map.")
+            
+        except Exception as e:
+            st.warning(f"Semantic mapping unavailable: {e}")
+    
+    with tab4:
+        st.subheader("✨ AI-Generated Document Insights")
+        
+        try:
+            with st.spinner("Generating AI insights..."):
+                insights = generate_ai_insights(text, embedding_model, sentiment_pipeline)
+                insights_text = format_insights_text(insights)
+                st.markdown(insights_text)
+                
+                # Suggested questions
+                st.markdown("**💡 Suggested Questions to Ask:**")
+                themes = insights.get("main_themes", [])
+                if themes:
+                    for i, theme in enumerate(themes[:3], 1):
+                        st.write(f"{i}. What are the key points about {theme}?")
+        except Exception as e:
+            st.warning(f"Insight generation failed: {e}")
+
+# ============================================================
+# SEMANTIC CLUSTERING - ENHANCED
+# ============================================================
+
+def render_semantic_clustering(chunks, embeddings):
+    """Render advanced semantic clustering visualization"""
+    try:
+        if len(chunks) < 3:
+            st.info("Not enough chunks for clustering (minimum 3 required)")
+            return
+        
+        # Create semantic map
+        cluster_df = create_semantic_map(embeddings, chunks, n_clusters=min(5, len(chunks)))
+        
+        if cluster_df is not None:
+            # Interactive semantic map
+            fig = plot_semantic_map(cluster_df)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Cluster summary
+            st.markdown("**Cluster Summary:**")
+            for cluster_name in cluster_df['cluster_name'].unique():
+                cluster_chunks_list = cluster_df[cluster_df['cluster_name'] == cluster_name]['text_preview'].tolist()
+                with st.expander(f"📌 {cluster_name} ({len(cluster_chunks_list)} chunks)"):
+                    for i, chunk_text in enumerate(cluster_chunks_list, 1):
+                        st.caption(f"{i}. {chunk_text}")
+        else:
+            st.warning("Could not create semantic clusters")
+    except Exception as e:
+        st.error(f"Clustering error: {e}")
+
+# ============================================================
 # PROMPT
-# ════════════════════════════════════════════════════════════
+# ============================================================
 
-def build_prompt(user_input: str, pdf_text: str) -> str:
-    if pdf_text.strip():
-        return f"""You are a helpful AI assistant.
+def build_prompt(user_input):
+    relevant_chunks = retrieve_relevant_chunks(user_input)
+    context = "\n\n".join(relevant_chunks)
+    return f"""You are MeowBot — a friendly AI research assistant.
 
-Answer using the PDF content below.
+Use the retrieved context below to answer accurately.
 
-PDF CONTENT:
-{pdf_text[:12000]}
+CONTEXT:
+{context}
 
-USER QUESTION:
+QUESTION:
 {user_input}
 """
-    return user_input
 
+# ============================================================
+# LLM RESPONSE
+# ============================================================
 
-# ════════════════════════════════════════════════════════════
-# CHAT RENDER
-# ════════════════════════════════════════════════════════════
-
-def render_chat_content(text: str) -> None:
-    st.markdown(text)
-
-
-# ════════════════════════════════════════════════════════════
-# SESSION
-# ════════════════════════════════════════════════════════════
-
-def init_session():
-    defaults = {
-        "messages": [],
-        "pdf_text": "",
-        "pdf_name": "",
-    }
-    for k, v in defaults.items():
-        if k not in st.session_state:
-            st.session_state[k] = v
-
-
-# ════════════════════════════════════════════════════════════
-# SIDEBAR  ← KEY FIX IS HERE
-# ════════════════════════════════════════════════════════════
-
-def render_sidebar():
-    with st.sidebar:
-        st.markdown('<div class="sidebar-logo">🤖 MEOWBOT AI</div>', unsafe_allow_html=True)
-
-        st.markdown('<div class="sidebar-section">API CONFIG</div>', unsafe_allow_html=True)
-
-        # Use index-based default so session state doesn't fight the widget
-        api_mode = st.radio(
-            "API Mode",
-            ["Use Default API Key", "Bring Your Own API Key"],
-            label_visibility="collapsed",
-        )
-
-        # ── FIX: always initialise user_api_key, only overwrite when BYOK ──
-        user_api_key = ""
-        # allow a temporary session-scoped key (entered on main page)
-        if "user_api_key" in st.session_state and not user_api_key:
-            user_api_key = st.session_state.get("user_api_key", "")
-        if api_mode == "Bring Your Own API Key":
-            user_api_key = st.text_input(
-                "Groq / OpenAI API Key",
-                type="password",
-                placeholder="gsk_... or sk-...",
-            )
-
-        # ── FIX: resolve final key correctly ──
-        default_api_key = get_default_api_key()
-        if api_mode == "Use Default API Key":
-            final_api_key = default_api_key
-        else:
-            # BYOK: prefer what the user typed; fall back to default
-            final_api_key = user_api_key.strip() if user_api_key.strip() else default_api_key
-
-        # ── optional status hint ──
-        if api_mode == "Use Default API Key":
-            if default_api_key:
-                st.success("✅ Default key loaded", icon=None)
-            else:
-                st.warning("⚠️ No default key found. Add GROQ_API_KEY to .env or Streamlit secrets.")
-
-        st.markdown('<div class="sidebar-section">MODEL</div>', unsafe_allow_html=True)
-
-        model = st.selectbox(
-            "Model",
-            [
-                "llama-3.3-70b-versatile",
-                "llama3-8b-8192",
-                "gemma2-9b-it",
-            ],
-            label_visibility="collapsed",
-        )
-
-        st.markdown('<div class="sidebar-section">PDF UPLOAD</div>', unsafe_allow_html=True)
-
-        uploaded = st.file_uploader(
-            "Upload PDF",
-            type=["pdf"],
-            label_visibility="collapsed",
-        )
-
-        if uploaded and uploaded.name != st.session_state.pdf_name:
-            with st.spinner("Parsing PDF..."):
-                text = extract_pdf_text(uploaded)
-            if text:
-                st.session_state.pdf_text = text
-                st.session_state.pdf_name = uploaded.name
-                st.success(f"Loaded: {uploaded.name}")
-
-        if st.session_state.pdf_name:
-            chars = len(st.session_state.pdf_text)
-            st.markdown(
-                f"""
-                <div class="pdf-info-box">
-                📄 {st.session_state.pdf_name}<br>
-                {chars:,} characters
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            if st.button("Remove PDF", use_container_width=True):
-                st.session_state.pdf_text = ""
-                st.session_state.pdf_name = ""
-                st.rerun()
-
-        # If no API key is available, allow a quick session-scoped paste here
-        if not final_api_key:
-            session_tmp = st.text_input(
-                "Paste Groq/OpenAI API key for this session (won't be saved to repo)",
-                type="password",
-                key="session_api_key",
-                placeholder="gsk_... or sk-...",
-            )
-
-            if session_tmp and session_tmp.strip():
-                st.session_state["user_api_key"] = session_tmp.strip()
-                final_api_key = session_tmp.strip()
-
-        st.markdown('<div class="sidebar-section">CONTROLS</div>', unsafe_allow_html=True)
-
-        if st.button("Clear Chat", use_container_width=True):
-            st.session_state.messages = []
-            st.rerun()
-
-    return final_api_key, model
-
-
-# ════════════════════════════════════════════════════════════
-# HERO
-# ════════════════════════════════════════════════════════════
-
-def render_hero():
-    st.markdown(
-        """
-        <div class="hero">
-            <div class="hero-title">MeowBot AI</div>
-            <div class="hero-sub">Futuristic AI Chatbot with PDF Intelligence</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-# ════════════════════════════════════════════════════════════
-# WELCOME
-# ════════════════════════════════════════════════════════════
-
-def render_welcome():
-    st.markdown(
-        """
-        <div class="welcome-card">
-            <h2>🤖 Neural Core Ready</h2>
-            <br>
-            <p>Upload a PDF and ask questions, or chat normally with MeowBot AI.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-# ════════════════════════════════════════════════════════════
-# CHAT HISTORY
-# ════════════════════════════════════════════════════════════
-
-def render_history():
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            render_chat_content(msg["content"])
-
-
-# ════════════════════════════════════════════════════════════
-# RESPONSE
-# ════════════════════════════════════════════════════════════
-
-def get_response(client, model, messages):
+def generate_response(client, model, messages):
     response = client.chat.completions.create(
         model=model,
         messages=messages,
-        temperature=0.7,
-        max_tokens=2048,
+        temperature=st.session_state.temperature,
+        max_tokens=st.session_state.max_tokens,
+        top_p=st.session_state.top_p,
     )
     return response.choices[0].message.content
 
+# ============================================================
+# MEOW EASTER EGG
+# ============================================================
 
-# ════════════════════════════════════════════════════════════
-# MAIN
-# ════════════════════════════════════════════════════════════
+def is_meow(text: str) -> bool:
+    """Return True if the message is just variations of 'meow'."""
+    cleaned = text.strip().lower().rstrip("!")
+    return cleaned in {"meow", "meeow", "meooow", "meoow", "meeeow", "mrow", "mrrow"}
 
-def main():
-    init_session()
-    st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
+# ============================================================
+# HERO
+# ============================================================
 
-    final_api_key, model = render_sidebar()
+st.markdown("""
+<div class="hero">
+    <h1>🐱 MeowBot</h1>
+    <p>Advanced Retrieval-Augmented Neural Intelligence System</p>
+    <div class="paws">🐾 🐾 🐾</div>
+</div>
+""", unsafe_allow_html=True)
 
-    render_hero()
+# ============================================================
+# SIDEBAR
+# ============================================================
 
-    if not st.session_state.messages:
-        render_welcome()
+api_key = get_api_key()
+model = "llama-3.3-70b-versatile"
+
+with st.sidebar:
+
+    st.markdown("""
+<div style="font-family:'Fredoka One',cursive;font-size:1.4rem;
+background:linear-gradient(90deg,#c084fc,#f472b6);-webkit-background-clip:text;
+-webkit-text-fill-color:transparent;padding-bottom:4px;">
+🐱 MeowBot
+</div>
+<div class="status-badge">
+<div class="status-dot"></div> Online
+</div>
+""", unsafe_allow_html=True)
+
+    st.divider()
+    st.subheader("⚙️ LLM Parameters")
+
+    st.session_state.temperature = st.slider("🌡️ Temperature", 0.0, 2.0, 0.7, step=0.05)
+    st.session_state.max_tokens  = st.slider("📏 Max Tokens",  256, 4096, 2048, step=128)
+    st.session_state.top_p       = st.slider("🎯 Top P",       0.1, 1.0, 1.0, step=0.05)
+
+    st.divider()
+    st.subheader("📄 Upload PDF")
+
+    uploaded_pdf = st.file_uploader("Drop a PDF to enable RAG", type=["pdf"])
+
+    if uploaded_pdf:
+        with st.spinner("🐱 Processing PDF..."):
+            text   = extract_pdf_text(uploaded_pdf)
+            st.session_state.pdf_text = text
+            chunks = chunk_text(text)
+            st.session_state.chunks   = chunks
+            store_chunks(chunks)
+
+        st.success("✅ PDF processed!")
+        st.markdown(f"""
+<div class="card">
+<strong>📊 PDF Stats</strong><br>
+🧩 Chunks: <code>{len(chunks)}</code><br>
+🔤 Characters: <code>{len(text):,}</code><br>
+📝 Words: <code>{len(text.split()):,}</code>
+</div>
+""", unsafe_allow_html=True)
+
+    st.divider()
+
+    st.markdown("""
+<div class="tip-box">
+💡 <strong>Easter Egg:</strong> Send <code>meow</code> to the bot — it speaks cat! 🐾
+</div>
+""", unsafe_allow_html=True)
+
+    st.write("")
+    if st.button("🗑️ Clear Chat", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
+
+# ============================================================
+# CHAT HISTORY
+# ============================================================
+
+for msg in st.session_state.messages:
+    avatar = "🐱" if msg["role"] == "assistant" else "🧑"
+    with st.chat_message(msg["role"], avatar=avatar):
+        st.markdown(msg["content"], unsafe_allow_html=True)
+
+# ============================================================
+# CHAT INPUT
+# ============================================================
+
+prompt = st.chat_input("Ask MeowBot... or just say meow 🐾")
+
+if prompt:
+
+    if not api_key:
+        st.error("🔑 Please set GROQ_API_KEY or OPENAI_API_KEY in your .env file")
+        st.stop()
+
+    # Store user message
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user", avatar="🧑"):
+        st.markdown(prompt)
+
+    # ── MEOW EASTER EGG ──────────────────────────────────────
+    if is_meow(prompt):
+        meow_response = '<span class="meow-reply">meow</span> 🐾'
+        st.session_state.messages.append({"role": "assistant", "content": meow_response})
+        with st.chat_message("assistant", avatar="🐱"):
+            st.markdown(meow_response, unsafe_allow_html=True)
+
+    # ── NORMAL RAG RESPONSE ───────────────────────────────────
     else:
-        render_history()
-
-    prompt = st.chat_input("Send a message to MeowBot AI...")
-
-    if prompt:
-        if not final_api_key:
-            st.error("❌ No API key configured. Add GROQ_API_KEY to Streamlit Secrets or enter a key below for this session.")
-
-            with st.form("enter_key_form"):
-                temp = st.text_input("Enter Groq/OpenAI API key for this session", type="password", key="temp_api_key")
-                submit = st.form_submit_button("Use key for this session")
-
-                if submit:
-                    if temp and temp.strip():
-                        st.session_state["user_api_key"] = temp.strip()
-                        st.success("Using provided API key for this session. Re-running...")
-                        st.experimental_rerun()
-                    else:
-                        st.warning("Please paste a valid API key before submitting.")
-
-            return
-
-        st.session_state.messages.append({"role": "user", "content": prompt})
-
-        with st.chat_message("user"):
-            render_chat_content(prompt)
-
-        final_prompt = build_prompt(prompt, st.session_state.pdf_text)
-
+        final_prompt = build_prompt(prompt)
         api_messages = [
-            {
-                "role": "system",
-                "content": "You are MeowBot AI. Reply clearly and professionally.",
-            },
-            # history excluding the last user message (which we send as final_prompt)
-            *[
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages[:-1]
-            ],
-            {"role": "user", "content": final_prompt},
+            {"role": "system", "content": "You are MeowBot — a friendly and helpful AI research assistant. Be concise and accurate."},
+            {"role": "user",   "content": final_prompt},
         ]
 
-        try:
-            with st.spinner("Thinking..."):
-                client = build_client(final_api_key)
-                reply = get_response(client, model, api_messages)
+        with st.spinner("🐱 MeowBot is thinking..."):
+            client   = build_client(api_key)
+            response = generate_response(client, model, api_messages)
 
-            st.session_state.messages.append({"role": "assistant", "content": reply})
+        st.session_state.messages.append({"role": "assistant", "content": response})
+        with st.chat_message("assistant", avatar="🐱"):
+            st.markdown(response)
 
-            with st.chat_message("assistant"):
-                render_chat_content(reply)
+# ============================================================
+# ANALYTICS DASHBOARD
+# ============================================================
 
-        except AuthenticationError:
-            st.error("❌ Authentication failed. Check your API key.")
-        except APIConnectionError:
-            st.error("❌ Connection error. Check your internet connection.")
-        except APIStatusError as exc:
-            st.error(f"❌ API error [{exc.status_code}]: {exc.message}")
-        except Exception as exc:
-            st.error(f"❌ Unexpected error: {exc}")
-
-
-if __name__ == "__main__":
-    main()
+if st.session_state.pdf_text:
+    st.divider()
+    
+    ensure_models_loaded()
+    render_analytics_dashboard(
+        st.session_state.pdf_text[:5000],
+        embedding_model,
+        sentiment_pipeline
+    )
+    
+    if len(st.session_state.chunks) >= 3:
+        st.markdown("---")
+        st.markdown("### 🗺️ Semantic Clustering Analysis")
+        embeddings = create_embeddings(st.session_state.chunks[:30])
+        render_semantic_clustering(st.session_state.chunks[:30], embeddings)

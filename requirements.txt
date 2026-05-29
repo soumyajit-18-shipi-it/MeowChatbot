@@ -1,10 +1,19 @@
-# Core runtime
-streamlit==1.57.0
-openai==2.38.0
-python-dotenv==1.0.0
-
-# PDF parsing
-pymupdf==1.27.2.3
-
-# Utilities (optional)
-rich==13.5.1
+streamlit
+openai
+python-dotenv
+pymupdf
+chromadb
+sentence-transformers
+transformers
+torch
+plotly
+pandas
+numpy
+scikit-learn
+nltk
+tiktoken
+spacy
+keybert
+umap-learn
+textstat
+regex
