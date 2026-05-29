@@ -1,4 +1,60 @@
-# 🤖 MeowBot AI
+# Meowbot
+
+ A lightweight retrieval-augmented assistant for local documents (PDFs, text).
+
+ Features
+- Retrieval-augmented generation using local embeddings and a Chroma DB.
+- PDF parsing and document ingestion utilities.
+- Modular core for embeddings, LLM interface, and RAG orchestration.
+
+ Requirements
+- Python 3.10+
+- A virtual environment (recommended)
+- Dependencies listed in `requirements.txt`
+
+ Quick start
+ 1. Create and activate a virtual environment (Windows PowerShell):
+
+    `python -m venv .venv`
+    `& .venv\Scripts\Activate.ps1`
+
+ 2. Install dependencies:
+
+    `pip install -r requirements.txt`
+
+ 3. Prepare or point the app to a Chroma DB directory (default: `data/chroma_db`).
+
+ 4. Run the application:
+
+    `python app.py`
+
+ Running tests
+
+ `pytest -q`
+
+ Project layout
+
+- `app.py` — main application entrypoint
+- `core/` — core RAG logic and LLM/embedding helpers
+  - `core/embeddings.py`
+  - `core/llm.py`
+  - `core/rag.py`
+- `utils/` — helpers and PDF parser
+- `nlp/` — tokenization, BoW, clustering, sentiment
+- `visualizer/` — analytics and charts
+- `data/` — local Chroma DB (not checked into source)
+
+ Notes
+- Keep the `data/chroma_db` directory persistent between runs to avoid re-indexing.
+- If you add large documents, re-generate embeddings before querying.
+
+ Contributing
+
+ PRs welcome. Add tests for new features and keep changes focused.
+
+ License
+
+ MIT# 🤖 MeowBot AI
 
 MeowBot AI is a futuristic AI chatbot built using Streamlit and Groq LLMs with PDF document intelligence support.
 
