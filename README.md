@@ -269,17 +269,6 @@ streamlit run app.py
 
 ---
 
-# 🚀 Future Improvements
-
-* RAG pipelines
-* Vector database support
-* OCR support
-* Multi-document querying
-* Voice assistant integration
-* Memory persistence
-* Authentication system
-* Cloud deployment support
-
 ---
 
 # 📜 License
