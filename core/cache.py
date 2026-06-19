@@ -45,7 +45,7 @@ def get_vector_database():
     )
 
     collection = client.get_or_create_collection(
-        name="meowbot_collection"
+        name="shipnchat_collection"
     )
 
     return collection

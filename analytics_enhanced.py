@@ -98,7 +98,8 @@ def extract_entities(text):
         except:
             st.info("Downloading spaCy model...")
             import os
-            os.system("python -m spacy download en_core_web_sm")
+            import sys
+            os.system(f"{sys.executable} -m spacy download en_core_web_sm")
             nlp = spacy.load("en_core_web_sm")
         
         doc = nlp(text[:3000])

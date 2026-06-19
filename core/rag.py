@@ -7,7 +7,7 @@ client = chromadb.PersistentClient(
 )
 
 collection = client.get_or_create_collection(
-    name="meowbot_collection"
+    name="shipnchat_collection"
 )
 
 def store_documents(chunks):

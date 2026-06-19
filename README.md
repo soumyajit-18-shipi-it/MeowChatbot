@@ -1,38 +1,41 @@
-# Meowbot
-live link : https://meowchatbot.streamlit.app/
- A lightweight retrieval-augmented assistant for local documents (PDFs, text).
+# ShipNChat
 
- Features
+A lightweight retrieval-augmented assistant for local documents (PDFs, text).
+
+## Features
+
 - Retrieval-augmented generation using local embeddings and a Chroma DB.
 - PDF parsing and document ingestion utilities.
 - Modular core for embeddings, LLM interface, and RAG orchestration.
 
- Requirements
+## Requirements
+
 - Python 3.10+
 - A virtual environment (recommended)
 - Dependencies listed in `requirements.txt`
 
- Quick start
- 1. Create and activate a virtual environment (Windows PowerShell):
+## Quick start
+
+1. Create and activate a virtual environment (Windows PowerShell):
 
     `python -m venv .venv`
     `& .venv\Scripts\Activate.ps1`
 
- 2. Install dependencies:
+2. Install dependencies:
 
     `pip install -r requirements.txt`
 
- 3. Prepare or point the app to a Chroma DB directory (default: `data/chroma_db`).
+3. Prepare or point the app to a Chroma DB directory (default: `data/chroma_db`).
 
- 4. Run the application:
+4. Run the application:
 
     `python app.py`
 
- Running tests
+## Running tests
 
- `pytest -q`
+`pytest -q`
 
- Project layout
+## Project layout
 
 - `app.py` — main application entrypoint
 - `core/` — core RAG logic and LLM/embedding helpers
@@ -44,21 +47,24 @@ live link : https://meowchatbot.streamlit.app/
 - `visualizer/` — analytics and charts
 - `data/` — local Chroma DB (not checked into source)
 
- Notes
+## Notes
+
 - Keep the `data/chroma_db` directory persistent between runs to avoid re-indexing.
 - If you add large documents, re-generate embeddings before querying.
 
- Contributing
+## Contributing
 
- PRs welcome. Add tests for new features and keep changes focused.
+PRs welcome. Add tests for new features and keep changes focused.
 
- License
+## License
 
- MIT# 🤖 MeowBot AI
+MIT
 
-MeowBot AI is a futuristic AI chatbot built using Streamlit and Groq LLMs with PDF document intelligence support.
+# ☕ ShipNChat
 
-Users can upload PDFs, ask questions about documents, and interact with an advanced cyberpunk-themed chatbot UI.
+ShipNChat is a cozy, café-inspired AI chatbot built using Streamlit and Groq LLMs with PDF document intelligence support.
+
+Users can upload PDFs, ask questions about documents, and interact with a warm, modern chatbot UI.
 
 ---
 
@@ -66,7 +72,7 @@ Users can upload PDFs, ask questions about documents, and interact with an advan
 
 ## ⚡ Groq-Powered AI Responses
 
-MeowBot AI uses Groq’s ultra-fast inference engine with OpenAI-compatible APIs to generate extremely fast AI responses. The app supports multiple models including:
+ShipNChat uses Groq's ultra-fast inference engine with OpenAI-compatible APIs to generate extremely fast AI responses. The app supports multiple models including:
 
 * `llama-3.3-70b-versatile`
 * `llama3-8b-8192`
@@ -76,7 +82,7 @@ The selected model processes user prompts and generates conversational responses
 
 ---
 
-## 📄 PDF Intelligence System
+# 📄 PDF Intelligence System
 
 Users can upload PDF documents directly into the chatbot.
 
@@ -97,7 +103,7 @@ This enables:
 
 ---
 
-## 💬 Persistent Chat History
+# 💬 Persistent Chat History
 
 The chatbot stores conversation history using Streamlit session state.
 
@@ -105,7 +111,7 @@ The chatbot stores conversation history using Streamlit session state.
 
 * Every user and assistant message is stored inside:
 
-```python id="31mevb"
+```python
 st.session_state.messages
 ```
 
@@ -114,25 +120,25 @@ st.session_state.messages
 
 ---
 
-## 🎨 Futuristic Cyberpunk UI
+# ☕ Cozy Café UI
 
 The interface is fully customized using advanced CSS styling.
 
 ### Includes
 
-* Glassmorphism effects
-* Neon glow aesthetics
-* Animated grid backgrounds
+* Warm coffee-shop color palette (brown, cream, caramel, beige)
+* Soft glow accents on interactive elements
+* Coffee-cup watermark and steam animations
 * Responsive layout
 * Modern chat bubbles
 * Gradient typography
 * Custom sidebar styling
 
-The design is inspired by futuristic AI operating systems and cyberpunk interfaces.
+The design is inspired by a warm, modern café aesthetic.
 
 ---
 
-## 🔑 Bring Your Own API Key (BYOK)
+# 🔑 Bring Your Own API Key (BYOK)
 
 Users can either:
 
@@ -143,7 +149,7 @@ Users can either:
 
 The app dynamically switches between:
 
-```python id="0vy4np"
+```python
 GROQ_API_KEY
 ```
 
@@ -160,7 +166,7 @@ The app reads Streamlit Secrets first, then falls back to local environment vari
 
 ---
 
-## 🧠 Multi-Model Support
+# 🧠 Multi-Model Support
 
 Users can dynamically switch between multiple LLMs directly from the sidebar.
 
@@ -175,9 +181,9 @@ The selected model is passed directly into the Groq API request.
 
 ---
 
-## 📂 PDF Upload System
+# 📂 PDF Upload System
 
-The PDF uploader supports drag-and-drop uploads through Streamlit’s file uploader component.
+The PDF uploader supports drag-and-drop uploads through Streamlit's file uploader component.
 
 ### Workflow
 
@@ -190,7 +196,7 @@ The uploaded document remains active until removed manually.
 
 ---
 
-## 🛡 Error Handling
+# 🛡 Error Handling
 
 The application includes robust exception handling for:
 
@@ -206,14 +212,14 @@ This prevents crashes and improves stability.
 
 # 🛠 Tech Stack
 
-| Technology | Purpose                |
-| ---------- | ---------------------- |
-| Python     | Backend logic          |
-| Streamlit  | Frontend framework     |
-| Groq API   | AI inference           |
-| OpenAI SDK | API compatibility      |
-| PyMuPDF    | PDF text extraction    |
-| dotenv     | Environment management |
+| Technology    | Purpose                |
+| ------------- | ---------------------- |
+| Python        | Backend logic          |
+| Streamlit     | Frontend framework     |
+| Groq API      | AI inference           |
+| OpenAI SDK    | API compatibility      |
+| PyMuPDF       | PDF text extraction    |
+| dotenv        | Environment management |
 
 ---
 
@@ -221,14 +227,14 @@ This prevents crashes and improves stability.
 
 Clone the repository:
 
-```bash id="7xv7vt"
+```bash
 git clone <your-repo-link>
-cd meowbot-ai
+cd shipnchat
 ```
 
 Install dependencies:
 
-```bash id="jlwmcz"
+```bash
 pip install -r requirements.txt
 ```
 
@@ -238,7 +244,7 @@ pip install -r requirements.txt
 
 Create a local `.env` file for development only:
 
-```env id="r4x6pr"
+```env
 GROQ_API_KEY=your_groq_api_key
 ```
 
@@ -252,7 +258,7 @@ On Streamlit Cloud, configure the same key names in the app's Secrets panel inst
 
 # ▶️ Run the App
 
-```bash id="b3a3lz"
+```bash
 streamlit run app.py
 ```
 
@@ -260,14 +266,12 @@ streamlit run app.py
 
 # 📁 Project Structure
 
-```bash id="t2m4hm"
+```bash
 ├── app.py
 ├── requirements.txt
 ├── .env
 └── README.md
 ```
-
----
 
 ---
 
@@ -288,4 +292,3 @@ BITS Pilani — Computer Science
 
 - The repository previously contained a `.env` file which has been removed from the commit history and added to `.gitignore`.
 - Do not commit secrets. Use `SECRETS_ROTATION.md` for immediate rotation steps and guidance on revoking exposed keys.
-

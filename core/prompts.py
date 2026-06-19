@@ -7,7 +7,7 @@ def build_prompt(user_input):
     context = "\n\n".join(chunks)
 
     return f"""
-You are MeowBot AI X.
+You are ShipNChat.
 
 Use the retrieved context to answer accurately.
 
